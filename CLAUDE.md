@@ -58,6 +58,10 @@ uv run ruff check --fix . && uv run ruff format .
   `pay_order`/capture works. Use the sandbox personal account from the developer dashboard for the demo.
 
 ## Rules
+- **Model split:** the main session (Opus) plans, designs and reviews. Delegate well-specified implementation
+  work to the `coder` subagent (Sonnet, `.claude/agents/coder.md`) with a brief that names the files and what
+  done looks like. Keep tiny edits (a few lines) in the main session, because a subagent starts cold and re-reads context.
+  Review the coder's diff before committing.
 - **Secrets live only in `.env`** (gitignored). Add every new variable to `.env.example` with an empty value
   and a comment. Never print, log, or commit keys or tokens.
 - **Sandbox only.** Never point `PAYPAL_ENVIRONMENT` at PRODUCTION or handle real money or card data.

@@ -1,12 +1,12 @@
-"""Verify local setup: env vars, PayPal sandbox OAuth, Claude API, Phoenix collector.
+"""Verify local setup: env vars, PayPal sandbox OAuth, OpenAI API, Phoenix collector.
 
 Run: uv run python scripts/check_setup.py
 """
 
-import anthropic
 import httpx
 from rich.console import Console
 
+from paypal_ai_hackathon.agent import openai_client
 from paypal_ai_hackathon.config import get_settings
 from paypal_ai_hackathon.tracing import setup_tracing
 
@@ -37,16 +37,14 @@ def paypal_token() -> str:
     return f"{s.paypal_environment}, token expires in {r.json()['expires_in']}s"
 
 
-def claude_ping() -> str:
+def openai_ping() -> str:
     s = get_settings()
-    r = anthropic.Anthropic().messages.create(
-        model=s.claude_model,
-        max_tokens=256,
-        output_config={"effort": "low"},
+    r = openai_client().chat.completions.create(
+        model=s.openai_model,
+        max_tokens=10,
         messages=[{"role": "user", "content": "Reply with exactly: pong"}],
     )
-    text = "".join(b.text for b in r.content if b.type == "text").strip()
-    return f"{s.claude_model} -> {text!r}"
+    return f"{s.openai_model} -> {(r.choices[0].message.content or '').strip()!r}"
 
 
 def phoenix_up() -> str:
@@ -60,10 +58,10 @@ if __name__ == "__main__":
     phoenix_ok = check("Phoenix collector reachable", phoenix_up)
     if phoenix_ok:
         setup_tracing()
-    results = [phoenix_ok, check("PayPal sandbox OAuth", paypal_token), check("Claude API", claude_ping)]
+    results = [phoenix_ok, check("PayPal sandbox OAuth", paypal_token), check("OpenAI API", openai_ping)]
     if phoenix_ok:
         from opentelemetry import trace
 
         trace.get_tracer_provider().force_flush()
-        console.print("[dim]Claude ping trace sent to Phoenix.[/dim]")
+        console.print("[dim]OpenAI ping trace sent to Phoenix.[/dim]")
     raise SystemExit(0 if all(results) else 1)

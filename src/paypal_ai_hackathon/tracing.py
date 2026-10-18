@@ -1,7 +1,7 @@
 """Phoenix (OpenInference / OpenTelemetry) tracing setup.
 
-Call `setup_tracing()` once at process start, before creating any Anthropic client.
-Every Claude call is then traced automatically; wrap your own steps with `tracer.start_as_current_span`.
+Call `setup_tracing()` once at process start, before creating any OpenAI client.
+Every OpenAI call is then traced automatically; wrap your own steps with `tracer.start_as_current_span`.
 """
 
 import logging
@@ -26,7 +26,7 @@ def setup_tracing() -> None:
         endpoint=settings.phoenix_collector_endpoint,
         project_name=settings.phoenix_project_name,
         batch=True,
-        auto_instrument=True,  # picks up openinference-instrumentation-anthropic
+        auto_instrument=True,  # picks up openinference-instrumentation-openai
         verbose=False,
     )
     _configured = True

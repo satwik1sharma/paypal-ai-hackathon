@@ -10,10 +10,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Claude
-    anthropic_api_key: SecretStr | None = None  # unset is fine if `ant auth login` was used
-    claude_model: str = "claude-opus-5-5"
-    claude_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # OpenAI (the SDK reads OPENAI_API_KEY itself; declared here so missing keys are caught early)
+    openai_api_key: SecretStr = SecretStr("")
+    openai_model: str = "gpt-4o-mini"  # cheap default for dev loops
+    openai_model_smart: str = "gpt-4o"  # for steps where mini isn't good enough
 
     # PayPal (sandbox only during the hackathon)
     paypal_client_id: str = ""

@@ -1,7 +1,7 @@
 [project]
 name = "paypal-ai-hackathon"
 version = "0.1.0"
-description = "PayPal AI Hackathon 2026 project: PayPal developer platform + Claude"
+description = "PayPal AI Hackathon 2026 project: PayPal developer platform + OpenAI"
 readme = "README.md"
 authors = [
     { name = "satwik1sharma", email = "satwik.prof@gmail.com" }
@@ -9,12 +9,12 @@ authors = [
 requires-python = ">=3.13"
 license = "MIT"
 dependencies = [
-    "anthropic>=1.15.0",
     "arize-phoenix-otel>=0.17.2",
     "fastapi>=0.146.0",
     "httpx>=0.28.1",
     "mcp>=2.3.0",
-    "openinference-instrumentation-anthropic>=3.0.3",
+    "openai>=1.109.1",
+    "openinference-instrumentation-openai>=0.1.59,<0.1.60",
     "paypal-agent-toolkit>=1.11.0",
     "pydantic>=2",
     "pydantic-settings>=2.16.0",
@@ -48,4 +48,4 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-markers = ["live: hits real PayPal sandbox / Claude APIs (deselect with -m 'not live')"]
+markers = ["live: hits real PayPal sandbox / OpenAI APIs (deselect with -m 'not live')"]

@@ -1,14 +1,14 @@
-"""Expose PayPal Agent Toolkit tools to Claude.
+"""Expose PayPal Agent Toolkit tools to OpenAI Chat Completions.
 
-The toolkit ships adapters for OpenAI / LangChain / CrewAI / Bedrock but not for the Anthropic SDK,
-so this module converts its shared tool registry into Anthropic tool definitions and dispatches
-Claude's `tool_use` calls back to `PayPalAPI.run`.
+The toolkit's own OpenAI adapter targets an old `openai-agents` release, so this module converts the
+shared tool registry into Chat Completions function definitions and dispatches tool calls back to
+`PayPalAPI.run` (with a Phoenix span per call).
 """
 
 import json
 from typing import Any
 
-from anthropic.types import ToolParam
+from openai.types.chat import ChatCompletionToolParam
 from paypal_agent_toolkit.shared.api import PayPalAPI
 from paypal_agent_toolkit.shared.configuration import Configuration, Context, is_tool_allowed
 from paypal_agent_toolkit.shared.tools import tools as TOOLKIT_TOOLS
@@ -43,8 +43,8 @@ class PayPalTools:
     def names(self) -> list[str]:
         return [t["method"] for t in self._enabled]
 
-    def definitions(self) -> list[ToolParam]:
-        return to_anthropic_tools(self._enabled)
+    def definitions(self) -> list[ChatCompletionToolParam]:
+        return to_openai_tools(self._enabled)
 
     def run(self, name: str, tool_input: dict[str, Any]) -> str:
         """Execute one PayPal tool call. Blocking (the toolkit uses `requests`)."""
@@ -59,12 +59,15 @@ class PayPalTools:
             return result if isinstance(result, str) else json.dumps(result)
 
 
-def to_anthropic_tools(toolkit_tools: list[dict[str, Any]]) -> list[ToolParam]:
+def to_openai_tools(toolkit_tools: list[dict[str, Any]]) -> list[ChatCompletionToolParam]:
     return [
         {
-            "name": t["method"],
-            "description": t["description"].strip(),
-            "input_schema": t["args_schema"].model_json_schema(),
+            "type": "function",
+            "function": {
+                "name": t["method"],
+                "description": t["description"].strip(),
+                "parameters": t["args_schema"].model_json_schema(),
+            },
         }
         for t in toolkit_tools
     ]

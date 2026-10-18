@@ -19,4 +19,4 @@ def main() -> None:
     result = run_agent(" ".join(sys.argv[1:]))
     console = Console()
     console.print(result.text)
-    console.print(f"[dim]stop_reason={result.stop_reason} tools={result.tool_calls}[/dim]")
+    console.print(f"[dim]finish_reason={result.finish_reason} tools={result.tool_calls}[/dim]")

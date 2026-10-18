@@ -9,7 +9,9 @@ implementation, design (a complete product, not a PoC), impact, innovation, and 
 
 ## Stack
 - Python 3.13, managed **only** with `uv`. Never `pip install` and never edit `uv.lock` by hand.
-- Claude via the official `anthropic` SDK (1.x). Default model `claude-opus-5-5` (set in `.env`).
+- AI via the official `openai` SDK, Chat Completions with function calling. Models: `gpt-4o-mini` by default
+  (`OPENAI_MODEL`), `gpt-4o` for harder steps (`OPENAI_MODEL_SMART`). Both are on the user's free daily-token
+  tier. **Don't switch to other or paid models without asking.**
 - PayPal via `paypal-agent-toolkit` (sandbox), plus raw REST calls with `httpx` when the toolkit lacks an endpoint.
 - Tracing via Arize Phoenix (OpenInference/OpenTelemetry). FastAPI + uvicorn for the HTTP layer.
 
@@ -18,7 +20,7 @@ implementation, design (a complete product, not a PoC), impact, innovation, and 
 uv sync                                      # install / update env
 uv add <pkg>   /   uv add --dev <pkg>        # add dependency (updates pyproject + lock)
 uvx arize-phoenix serve                      # Phoenix UI + collector on :6006 (keep it running)
-uv run python scripts/check_setup.py         # verify .env, PayPal OAuth, Claude, Phoenix
+uv run python scripts/check_setup.py         # verify .env, PayPal OAuth, OpenAI, Phoenix
 uv run paypal-ai-hackathon "<prompt>"        # run the agent once from the CLI
 uv run uvicorn paypal_ai_hackathon.api:app --reload   # API on :8000 (/docs)
 uv run pytest -m "not live"                  # offline tests (run before every commit)
@@ -27,28 +29,31 @@ uv run ruff check --fix . && uv run ruff format .
 
 ## Layout
 - `src/paypal_ai_hackathon/config.py`: every setting goes through `Settings` (pydantic-settings, reads `.env`). Don't use `os.getenv` elsewhere.
-- `tracing.py`: call `setup_tracing()` once at process start, before creating any Anthropic client.
-- `paypal_tools.py`: adapter from the toolkit's tool registry to Anthropic tool definitions, plus dispatch.
-- `agent.py`: manual Claude tool-use loop. `api.py`: FastAPI app.
+- `tracing.py`: call `setup_tracing()` once at process start, before creating any OpenAI client.
+- `paypal_tools.py`: adapter from the toolkit's tool registry to OpenAI function tools, plus dispatch.
+- `agent.py`: manual tool-calling loop; get clients from `openai_client()`. `api.py`: FastAPI app.
 - `scripts/`: one-off and dev scripts. `tests/`: pytest; mark tests that hit real APIs with `@pytest.mark.live`.
 
 ## Gotchas (read before touching these areas)
 - **Phoenix server must NOT be installed in the project env.** `arize-phoenix` conflicts with the toolkit's deps
   (graphql-core) and its `phoenix` package breaks `import phoenix.otel`. Always run it with `uvx`. The project
-  only depends on `arize-phoenix-otel` + `openinference-instrumentation-anthropic`.
-- **The PayPal toolkit has no Anthropic adapter.** We build tools from `paypal_agent_toolkit.shared.tools` and
-  run them through `PayPalAPI.run`. Tool names in the installed Python package differ from the GitHub README
+  only depends on `arize-phoenix-otel` + `openinference-instrumentation-openai`.
+- **Don't use the toolkit's own OpenAI adapter** (`paypal_agent_toolkit.openai`). It's built on `openai-agents`
+  0.0.2, which is ancient. We build tools from `paypal_agent_toolkit.shared.tools` and run them through `PayPalAPI.run`. Tool names in the installed Python package differ from the GitHub README
   (e.g. `get_order_details`, not `get_order`; no refund tools). Trust the registry, not the README.
 - The toolkit is **synchronous** (`requests`) and fetches a new OAuth token on every call. Wrap it in
   `asyncio.to_thread` inside async code, and cache tokens if you write your own PayPal client.
 - **Don't set the toolkit's logger to DEBUG** in anything shared or recorded: it logs request headers, including the Bearer token.
-- `anthropic` 1.x is built on `httpx2`. Don't pass `httpx` objects (clients, timeouts) to the Anthropic client.
-- Opus 5.5 API rules: thinking is always on (never send `thinking: disabled` or `budget_tokens`), forced
-  `tool_choice` (`any`/`tool`) returns 400, and there's no assistant prefill. Control depth with
-  `output_config.effort`. Append `response.content` unchanged to history and never edit earlier turns.
-  Return all `tool_result`s for one turn in a single user message.
-- Agent calls use `client.beta.messages.create` with `fallbacks="default"` (beta `server-side-fallback-2026-07-01`)
-  so a refused turn is rerouted. Always check `stop_reason` (`refusal`, `max_tokens`) before using content.
+- **`openai` is stuck below 2.0** because the toolkit pulls in old CrewAI/LangChain packages. So
+  `openinference-instrumentation-openai` is pinned to `<0.1.60` (0.1.60+ needs openai 2.8 and silently traces
+  nothing). Don't bump either one unless you drop the toolkit dependency.
+- **The OpenAI SDK doesn't read `.env`**, only `os.environ`. Always create clients via `agent.openai_client()`,
+  which takes the key from `Settings`. A bare `OpenAI()` fails with "api_key must be set".
+- Chat Completions tool loop: append the assistant message (with its `tool_calls`), then exactly one
+  `{"role": "tool", "tool_call_id": ...}` message per call, or the next request 400s.
+  `function.arguments` is a JSON string, so parse it with `json.loads`.
+- gpt-4o-mini sometimes invents tool arguments, such as fake emails or currencies. Validate money amounts and
+  recipients before calling PayPal, and use gpt-4o where accuracy matters.
 - PayPal sandbox: buyer approval happens in the browser via the order's `approve` link before
   `pay_order`/capture works. Use the sandbox personal account from the developer dashboard for the demo.
 

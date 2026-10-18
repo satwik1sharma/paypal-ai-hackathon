@@ -27,7 +27,7 @@ class AgentRequest(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     settings = get_settings()
-    return {"status": "ok", "model": settings.claude_model, "paypal": settings.paypal_environment}
+    return {"status": "ok", "model": settings.openai_model, "paypal": settings.paypal_environment}
 
 
 @app.post("/agent")

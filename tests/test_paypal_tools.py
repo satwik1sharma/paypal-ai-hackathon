@@ -1,7 +1,8 @@
+import requests
 from paypal_agent_toolkit.shared.configuration import Configuration, Context, is_tool_allowed
 from paypal_agent_toolkit.shared.tools import tools as TOOLKIT_TOOLS
 
-from paypal_ai_hackathon.paypal_tools import DEFAULT_ACTIONS, to_openai_tools
+from paypal_ai_hackathon.paypal_tools import DEFAULT_ACTIONS, paypal_error_detail, to_openai_tools
 
 
 def test_default_actions_enable_order_tools():
@@ -19,3 +20,15 @@ def test_openai_tool_shape():
         assert set(fn) == {"name", "description", "parameters"}
         assert fn["parameters"]["type"] == "object"
         assert fn["description"]
+
+
+def test_paypal_error_detail_surfaces_issue():
+    resp = requests.Response()
+    resp.status_code = 422
+    resp._content = (
+        b'{"name":"UNPROCESSABLE_ENTITY","message":"The requested action could not be performed.",'
+        b'"details":[{"issue":"ORDER_NOT_APPROVED","description":"Payer has not yet approved the Order."}]}'
+    )
+    detail = paypal_error_detail(requests.HTTPError(response=resp))
+    assert "422" in detail
+    assert "ORDER_NOT_APPROVED" in detail

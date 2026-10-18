@@ -8,6 +8,7 @@ shared tool registry into Chat Completions function definitions and dispatches t
 import json
 from typing import Any
 
+import requests
 from openai.types.chat import ChatCompletionToolParam
 from paypal_agent_toolkit.shared.api import PayPalAPI
 from paypal_agent_toolkit.shared.configuration import Configuration, Context, is_tool_allowed
@@ -54,7 +55,11 @@ class PayPalTools:
             span.set_attribute("openinference.span.kind", "TOOL")
             span.set_attribute("tool.name", name)
             span.set_attribute("input.value", json.dumps(tool_input))
-            result = self._api.run(name, tool_input)
+            try:
+                result = self._api.run(name, tool_input)
+            except requests.HTTPError as exc:
+                # The toolkit's message is just "422 ... Unknown Error"; PayPal's real reason is in the body.
+                raise PayPalError(paypal_error_detail(exc)) from exc
             span.set_attribute("output.value", result if isinstance(result, str) else json.dumps(result))
             return result if isinstance(result, str) else json.dumps(result)
 
@@ -71,3 +76,20 @@ def to_openai_tools(toolkit_tools: list[dict[str, Any]]) -> list[ChatCompletionT
         }
         for t in toolkit_tools
     ]
+
+
+class PayPalError(RuntimeError):
+    """A PayPal API call failed; the message carries PayPal's own issue code and description."""
+
+
+def paypal_error_detail(exc: requests.HTTPError) -> str:
+    resp = exc.response
+    if resp is None:
+        return str(exc)
+    try:
+        body = resp.json()
+    except ValueError:
+        return f"HTTP {resp.status_code}: {resp.text[:300]}"
+    issues = [f"{d.get('issue')}: {d.get('description')}" for d in body.get("details", [])]
+    summary = body.get("message") or body.get("name") or "PayPal error"
+    return f"HTTP {resp.status_code} {summary}" + (" | " + "; ".join(issues) if issues else "")
